@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
 import * as LlmPiAi from '@deepseek-ai/dsh-llm-pi-ai'
-import { resolveProfiles } from '../src/config.ts'
+import { Config, resolveProfiles } from '../src/config.ts'
 import { BUNDLED_PROVIDERS, bundledProvider } from '../src/bundled-catalog.ts'
 import { assemble } from './assemble.ts'
 import { memoryAuth } from './auth-double.ts'
@@ -42,6 +42,33 @@ describe('bundled catalog', () => {
     expect(resolved.api).toBe('openai-responses')
     expect(resolved.baseURL).toBe('https://ollama.com/v1')
     expect(resolved.piProvider?.id).toBe('ollama-cloud')
+  })
+
+  it('bounds the route\'s request images below the service gateway limit', () => {
+    const resolved = resolveProfiles({ 'ollama-cloud': { apiKeyEnv: KEY_ENV } }).get('ollama-cloud')!
+
+    // The gateway rejects a whole request body above roughly 12 MB, which the
+    // generic 20 MiB image bound exceeds; the bundled route keeps headroom for
+    // text, tools, and JSON structure.
+    expect(resolved.maxRequestImageBytes).toBe(8 * 1024 * 1024)
+  })
+
+  it('lets configuration widen or narrow the bundled image bound', () => {
+    const resolved = resolveProfiles({
+      'ollama-cloud': { apiKeyEnv: KEY_ENV, maxRequestImageBytes: 16 * 1024 * 1024 },
+    }).get('ollama-cloud')!
+
+    expect(resolved.maxRequestImageBytes).toBe(16 * 1024 * 1024)
+  })
+
+  it('keeps the bundled image bound through schema defaulting', () => {
+    const parsed = Config({ providers: { 'ollama-cloud': { apiKeyEnv: KEY_ENV } } }).providers.get()
+
+    // A schema default on the field would materialize here and overwrite the
+    // bundle's bound during resolution, so absence must stay absent.
+    expect(parsed['ollama-cloud']?.maxRequestImageBytes).toBeUndefined()
+    expect(resolveProfiles({ 'ollama-cloud': { apiKeyEnv: KEY_ENV } }).get('ollama-cloud')?.maxRequestImageBytes)
+      .toBe(8 * 1024 * 1024)
   })
 
   it('serves the bundled models with their real capacities instead of the route defaults', async () => {

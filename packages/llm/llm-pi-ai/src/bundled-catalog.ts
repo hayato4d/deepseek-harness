@@ -125,6 +125,12 @@ export interface BundledProvider {
   readonly baseURL: string
   /** Wire protocol every model on the route speaks. */
   readonly api: Api
+  /**
+   * Base64 image payload a single request may carry, when the service's
+   * gateway bounds the whole request body. It replaces the adapter's generic
+   * default for this route; a profile's own `maxRequestImageBytes` still wins.
+   */
+  readonly maxRequestImageBytes?: number
   /** The route's models, in directory order. */
   readonly models: readonly BundledModel[]
 }
@@ -145,6 +151,11 @@ export interface BundledProvider {
  * by close to an order of magnitude. A model whose vendor document has not been
  * checked yet carries that upper bound, which is safe — the endpoint accepts it
  * — but states a capability the model does not have.
+ *
+ * `maxRequestImageBytes` reflects the service's gateway cap: a request body
+ * above roughly 12 MB is rejected with HTTP 413. Eight MiB of base64 images
+ * leaves room for text, tools, and JSON structure under that cap, so a
+ * screenshot-heavy session offloads older images instead of losing the turn.
  */
 /**
  * The hours Ollama Cloud bills at peak: 12:00-18:00 UTC on weekdays. Every other
@@ -163,6 +174,7 @@ const OLLAMA_CLOUD: BundledProvider = {
   name: 'Ollama Cloud',
   baseURL: 'https://ollama.com/v1',
   api: 'openai-responses',
+  maxRequestImageBytes: 8 * 1024 * 1024,
   models: [
     { id: 'deepseek-v4.1-flash:1017', name: 'DeepSeek-V4.1-Flash', contextWindow: 1_048_576, maxTokens: 393_216, input: ['text', 'image'], reasoning: true, supportsOff: true, peakWindow: OLLAMA_PEAK },
     { id: 'deepseek-v4-pro:0813', name: 'DeepSeek V4 Pro', contextWindow: 1_048_576, maxTokens: 65_536, input: ['text'], reasoning: true, supportsOff: true, peakWindow: OLLAMA_PEAK },

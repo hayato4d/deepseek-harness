@@ -357,7 +357,9 @@ const profile = z.object({
   timeoutMs: z.natural(),
   websocketConnectTimeoutMs: z.natural(),
   streamIdleTimeoutMs: z.number().min(Number.MIN_VALUE).max(MAX_TIMER_DELAY_MS).default(DEFAULT_STREAM_IDLE_TIMEOUT_MS),
-  maxRequestImageBytes: z.number().step(1).min(1).default(DEFAULT_MAX_REQUEST_IMAGE_BYTES),
+  // No schema default: absence means the route's own bound, so a bundled route
+  // can supply it before the adapter falls back to the generic 20 MiB.
+  maxRequestImageBytes: z.number().step(1).min(1),
   requestImagePixelBudget: z.number().step(1).min(1).default(DEFAULT_REQUEST_IMAGE_PIXEL_BUDGET),
   requestImageMaxBytes: z.number().step(1).min(1).default(DEFAULT_REQUEST_IMAGE_MAX_BYTES),
   retryPolicy: RetryPolicySchema,
@@ -434,6 +436,10 @@ export function resolveProfiles(
   for (const [provider, source] of entries) {
     rejectRemovedFields(provider, source)
     if (provider.length === 0) throw new Error('llm-pi-ai: provider names must be non-empty')
+    // Bundle facts answer fields a profile leaves unset, and the request image
+    // bound is one of them: the route's gateway limit is a service fact, like
+    // its endpoint and protocol.
+    const bundled = bundledProvider(provider)
     if (source.baseURL !== undefined && source.baseURL.length === 0) {
       throw new Error(`llm-pi-ai: provider "${provider}" has an empty baseURL`)
     }
@@ -449,7 +455,7 @@ export function resolveProfiles(
         `llm-pi-ai: provider "${provider}" streamIdleTimeoutMs must be a positive finite number no greater than ${MAX_TIMER_DELAY_MS}`,
       )
     }
-    const maxRequestImageBytes = source.maxRequestImageBytes ?? DEFAULT_MAX_REQUEST_IMAGE_BYTES
+    const maxRequestImageBytes = source.maxRequestImageBytes ?? bundled?.maxRequestImageBytes ?? DEFAULT_MAX_REQUEST_IMAGE_BYTES
     if (!Number.isInteger(maxRequestImageBytes) || maxRequestImageBytes <= 0) {
       throw new Error(`llm-pi-ai: provider "${provider}" maxRequestImageBytes must be a positive integer`)
     }
@@ -475,7 +481,6 @@ export function resolveProfiles(
     // itself on every configuration surface just because it gained a profile.
     // A bundled route is the exception, because this build ships the product
     // name a selector should show and nothing else supplies it.
-    const bundled = bundledProvider(provider)
     const displayName = source.displayName ?? bundled?.name ?? provider
     // A bundled route defaults its endpoint and protocol from the bundle, so a
     // profile that only names a credential serves it. A profile naming either

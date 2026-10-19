@@ -35,7 +35,7 @@ kind: "package-reference"
 
 ### 本构建内置的路由
 
-pi-ai 的已安装目录是它所随附的每个提供方的权威答案，被它命名的路由都使用该答案。pi-ai 从未听说过的提供方则一无所获，因此本构建内置了 **Ollama Cloud**（`ollama-cloud`）：仅声明凭据的 profile 即会解析出 `https://ollama.com/v1`、OpenAI Responses 协议，以及该服务的模型及其真实的上下文窗口、输出上限、输入模态与推理等级。该路由键属于该云服务；本地 Ollama 服务器仍作为手工声明路由，使用部署赋予它的任意 id。该内置路由无需任何配置，且没有任何一处是硬编码到 profile 上的：声明 `baseURL`、`api`、`models` 或 `modelOverrides` 仍按字段覆盖，因此把该路由指向代理或修正某个容量与目录路由的行为完全一致。内置目录未命名的模型会像任何手工声明条目一样，依据路由的 `defaultContextWindow` 与 `defaultMaxTokens` 解析。profile 未指定名称时，选择器显示内置的产品名。
+pi-ai 的已安装目录是它所随附的每个提供方的权威答案，被它命名的路由都使用该答案。pi-ai 从未听说过的提供方则一无所获，因此本构建内置了 **Ollama Cloud**（`ollama-cloud`）：仅声明凭据的 profile 即会解析出 `https://ollama.com/v1`、OpenAI Responses 协议，以及该服务的模型及其真实的上下文窗口、输出上限、输入模态与推理等级。该路由键属于该云服务；本地 Ollama 服务器仍作为手工声明路由，使用部署赋予它的任意 id。该内置路由无需任何配置，且没有任何一处是硬编码到 profile 上的：声明 `baseURL`、`api`、`models` 或 `modelOverrides` 仍按字段覆盖，因此把该路由指向代理或修正某个容量与目录路由的行为完全一致。内置目录未命名的模型会像任何手工声明条目一样，依据路由的 `defaultContextWindow` 与 `defaultMaxTokens` 解析。profile 未指定名称时，选择器显示内置的产品名。内置数据还会把该路由的 `maxRequestImageBytes` 设为 8 MiB，低于该服务网关约 12 MB 的请求体上限，因此截图密集的会话会把较早的图片卸载为占位符，而不是以 HTTP 413 失败。
 
 内置路由的推理等级来自内置数据而非配置。无论请求什么都会继续思考的模型不会提供 `off` 等级，因此选择器不会呈现提供方会忽略的设置。每个等级都带有自己的线上拼写，而 `off` 会作为抑制思考的参数值发送，而不是省略该字段。
 
@@ -91,7 +91,7 @@ pi-ai 的已安装目录是它所随附的每个提供方的权威答案，被�
 | `defaultMaxTokens` | `32,768` | 未描述模型的输出上限回退 |
 | `requestImagePixelBudget` | `4,194,304` | 每张确定性请求图片的总像素预算 |
 | `requestImageMaxBytes` | `1 MiB` | 每张请求图片在 base64 扩展前的编码字节目标 |
-| `maxRequestImageBytes` | `20 MiB` | base64 图片载荷总上限，保留图片超过时请求以 `IMAGE_OFFLOAD_REQUIRED` 失败 |
+| `maxRequestImageBytes` | `20 MiB`（内置 Ollama Cloud 路由为 `8 MiB`） | base64 图片载荷总上限，保留图片超过时请求以 `IMAGE_OFFLOAD_REQUIRED` 失败 |
 | `retryPolicy` | normal，5 次重试 | 由 `dsh-llm-retry` 执行的提供方自有重试策略 |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-llm-pi-ai)是每个受支持字段及其 JSDoc 的穷尽式真源。
@@ -273,7 +273,7 @@ pi-ai 事件变成 harness 的推理、文本、工具调用、用量与 finish 
 
 - **内置路由的事实是该服务的快照**——Ollama Cloud 的模型可能在本构建之外变化；内置目录未命名的模型会依据路由容量解析且不提供推理等级，直到它被加入此处，而被服务下线的模型在此之前仍会列出。
 - **内置条目的输出上限取决于其来源**——存在供应商文档化上限时使用该值（GLM 5.3 与 GLM 5.3 Flash 为 131,072）；否则条目携带 Ollama 端点接受的最大 `max_tokens`，那是上界而非模型自身的真实上限。此处每个值都会被端点接受，因此未核实来源的条目是夸大了能力，而不是让请求失败。
-- **`maxRequestImageBytes` 只计算 base64 图片载荷**，文本、工具、描述符与 JSON 结构在该上限之外，因此它必须留有余量地低于网关请求体上限。
+- **`maxRequestImageBytes` 只计算 base64 图片载荷**，文本、工具、描述符与 JSON 结构在该上限之外，因此它必须留有余量地低于网关请求体上限。内置 Ollama Cloud 路由携带该上限为其留出的 8 MiB；网关更严格的路由需自行提供数值。
 - **登录只存在于发起它的进程中**——授权尝试不持久，因此登录中途刷新页面会放弃它，用户需要重新开始。退出登录是对已存储记录执行 `deleteRecord`，只在本地忘记它，不会告知签发方。
 - **OpenAI 不提供 ChatGPT 登录**——pi-ai 的 Sign in with ChatGPT 用应用提供的稳定 UUID 向 OpenAI 标识安装实例，而 harness 没有用于第三方账号登录的安装 ID；`openai` 路由改用 API key 登录。
 - **提供方原生发现经本插件的 ambient context 回答**——不点名凭据的路由交由目录提供方自身解析，它会询问环境值（`AZURE_OPENAI_API_KEY`、`AWS_PROFILE` 及各提供方自有集合）与本地凭据文件。两个问题都在这里得到回答：凭据 seam 先于进程环境被查询，文件存在性则针对宿主进程的文件系统以 `~` 展开后检查。它做不到的是*读取*凭据文件内容——自行解析 `~/.aws/credentials` 的提供方会直接读取，不经该 seam。
